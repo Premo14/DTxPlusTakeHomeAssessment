@@ -62,5 +62,12 @@ router.post('/recording-complete', async (req, res) => {
     }
 });
 
+router.post('/status', (req, res) => {
+    const { CallSid, CallStatus, Timestamp } = req.body;
+
+    console.log(`📞 Call status update - SID: ${CallSid}, Status: ${CallStatus}, Time: ${Timestamp || 'N/A'}`);
+
+    res.sendStatus(200);
+});
 
 module.exports = router;
