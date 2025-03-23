@@ -19,3 +19,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
+const path = require('path');
+app.use('/tts', express.static(path.join(__dirname, 'public', 'tts')));

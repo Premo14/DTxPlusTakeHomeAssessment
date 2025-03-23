@@ -5,7 +5,6 @@ const path = require('path');
 const { initiateCall, sendSMS } = require('../services/twilio');
 const twilio = require('twilio');
 
-// Trigger an outgoing call
 router.post('/', async (req, res) => {
     const { phoneNumber } = req.body;
 
@@ -22,19 +21,22 @@ router.post('/', async (req, res) => {
     }
 });
 
-// TwiML for both outbound and inbound calls
-router.all('/voice', (req, res) => {
-    const direction = req.body.Direction || 'unknown';
-    console.log(`📲 Incoming /voice request. Direction: ${direction}`);
-
+router.all('/voice', async (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
+    const callSid = req.body.CallSid || 'default';
 
-    twiml.pause({ length: 2 });
+    const message = 'Hello, this is a reminder from your healthcare provider to confirm your medications for the day. Please leave a message after the beep confirming if you have taken your Aspirin, Cardivol, and Metformin today.';
 
-    twiml.say(
-        { voice: 'alice' },
-        'Hello, this is a reminder from your healthcare provider to confirm your medications for the day. Please leave a message after the beep confirming if you have taken your Aspirin, Cardivol, and Metformin today.'
-    );
+    try {
+        const { generateSpeech } = require('../services/tts');
+        const audioPath = await generateSpeech(message, callSid);
+
+        twiml.pause({ length: 2 });
+        twiml.play(`${process.env.BASE_URL}${audioPath}`);
+    } catch (err) {
+        console.error('❌ ElevenLabs error:', err.message);
+        twiml.say({ voice: 'alice' }, message);
+    }
 
     twiml.record({
         transcribe: false,
@@ -53,7 +55,6 @@ router.all('/voice', (req, res) => {
     res.send(twiml.toString());
 });
 
-// Response after recording is complete
 router.post('/handle-recording', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say('Thanks! Your response has been recorded. Goodbye.');
@@ -61,7 +62,6 @@ router.post('/handle-recording', (req, res) => {
     res.send(twiml.toString());
 });
 
-// Handle transcription and logging after recording
 router.post('/recording-complete', async (req, res) => {
     const recordingUrl = req.body.RecordingUrl;
     const callSid = req.body.CallSid;
