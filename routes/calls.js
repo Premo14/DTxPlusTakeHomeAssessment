@@ -30,14 +30,23 @@ router.all('/voice', (req, res) => {
     twiml.record({
         transcribe: false,
         maxLength: 10,
-        action: '/api/call/handle-recording',
-        recordingStatusCallback: '/api/call/recording-complete',
+        action: `/api/call/handle-recording`,
+        recordingStatusCallback: `${process.env.BASE_URL}/api/call/recording-complete`,
+        recordingStatusCallbackMethod: 'POST',
+        timeout: 5,
+        playBeep: true,
     });
 
     res.type('text/xml');
     res.send(twiml.toString());
 });
 
+router.post('/handle-recording', (req, res) => {
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say('Thanks! Your response has been recorded. Goodbye.');
+    res.type('text/xml');
+    res.send(twiml.toString());
+});
 
 router.post('/recording-complete', async (req, res) => {
     const recordingUrl = req.body.RecordingUrl;
@@ -52,6 +61,7 @@ router.post('/recording-complete', async (req, res) => {
     console.log(`🎤 Recording available at: ${recordingUrl}.mp3`);
 
     try {
+        console.log('📥 Starting transcription for:', `${recordingUrl}.mp3`);
         const { transcribedText } = await require('../services/stt').transcribeFromUrl(`${recordingUrl}.mp3`);
         console.log(`📝 Transcription for Call SID ${callSid}:`, transcribedText);
 
