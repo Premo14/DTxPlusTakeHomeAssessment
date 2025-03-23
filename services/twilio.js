@@ -28,6 +28,20 @@ const initiateCall = async (toPhoneNumber) => {
     }
 };
 
+const sendSMS = async (toPhoneNumber, message) => {
+    try {
+        await client.messages.create({
+            body: message,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to: toPhoneNumber
+        });
+        console.log(`📩 SMS sent to ${toPhoneNumber}`);
+    } catch (error) {
+        console.error('❌ Error sending SMS:', error.message);
+    }
+};
+
 module.exports = {
     initiateCall,
+    sendSMS,
 };

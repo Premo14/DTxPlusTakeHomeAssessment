@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { initiateCall } = require('../services/twilio');
+const fs = require('fs');
+const path = require('path');
+const { initiateCall, sendSMS } = require('../services/twilio');
 const twilio = require('twilio');
 
+// Trigger an outgoing call
 router.post('/', async (req, res) => {
     const { phoneNumber } = req.body;
 
@@ -19,6 +22,7 @@ router.post('/', async (req, res) => {
     }
 });
 
+// TwiML for both outbound and inbound calls
 router.all('/voice', (req, res) => {
     const direction = req.body.Direction || 'unknown';
     console.log(`📲 Incoming /voice request. Direction: ${direction}`);
@@ -49,7 +53,7 @@ router.all('/voice', (req, res) => {
     res.send(twiml.toString());
 });
 
-
+// Response after recording is complete
 router.post('/handle-recording', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say('Thanks! Your response has been recorded. Goodbye.');
@@ -57,6 +61,7 @@ router.post('/handle-recording', (req, res) => {
     res.send(twiml.toString());
 });
 
+// Handle transcription and logging after recording
 router.post('/recording-complete', async (req, res) => {
     const recordingUrl = req.body.RecordingUrl;
     const callSid = req.body.CallSid;
@@ -74,6 +79,23 @@ router.post('/recording-complete', async (req, res) => {
         const { transcribedText } = await require('../services/stt').transcribeFromUrl(`${recordingUrl}.mp3`);
         console.log(`📝 Transcription for Call SID ${callSid}:`, transcribedText);
 
+        // Save to call_logs.json
+        const logsPath = path.join(__dirname, '..', 'call_logs.json');
+        const callData = {
+            callSid,
+            recordingUrl: `${recordingUrl}.mp3`,
+            transcript: transcribedText,
+            timestamp: new Date().toISOString()
+        };
+
+        let logs = [];
+        if (fs.existsSync(logsPath)) {
+            logs = JSON.parse(fs.readFileSync(logsPath));
+        }
+        logs.push(callData);
+        fs.writeFileSync(logsPath, JSON.stringify(logs, null, 2));
+        console.log(`🗃️ Call log saved for SID ${callSid}`);
+
         res.sendStatus(200);
     } catch (error) {
         console.error('❌ Error transcribing audio:', error.message);
@@ -81,12 +103,37 @@ router.post('/recording-complete', async (req, res) => {
     }
 });
 
-router.post('/status', (req, res) => {
-    const { CallSid, CallStatus, Timestamp } = req.body;
+router.post('/status', async (req, res) => {
+    console.log('📡 Full Call Status Webhook Body:', req.body);
+
+    const { CallSid, CallStatus, Timestamp, To } = req.body;
+    const AnsweredBy = req.body.AnsweredBy || 'unknown';
 
     console.log(`📞 Call status update - SID: ${CallSid}, Status: ${CallStatus}, Time: ${Timestamp || 'N/A'}`);
 
+    if (
+        ['no-answer', 'failed', 'busy', 'canceled'].includes(CallStatus) ||
+        (CallStatus === 'completed' && AnsweredBy.startsWith('machine'))
+    ) {
+        if (To) {
+            await sendSMS(To, 'We called to check on your medication but couldn’t reach you. Please call us back or take your medications if you haven’t done so.');
+        } else {
+            console.warn('⚠️ No "To" field in webhook. Cannot send SMS.');
+        }
+    }
+
     res.sendStatus(200);
+});
+
+router.get('/logs', (req, res) => {
+    const logsPath = path.join(__dirname, '..', 'call_logs.json');
+
+    if (!fs.existsSync(logsPath)) {
+        return res.status(200).json([]);
+    }
+
+    const logs = JSON.parse(fs.readFileSync(logsPath));
+    res.status(200).json(logs);
 });
 
 module.exports = router;
