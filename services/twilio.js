@@ -14,7 +14,9 @@ const initiateCall = async (toPhoneNumber) => {
             statusCallback: `${process.env.BASE_URL}/api/call/status`,
             statusCallbackMethod: 'POST',
             statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-            method: 'POST'
+            method: 'POST',
+            machineDetection: 'Enable',
+            ifMachine: 'Continue',
         });
 
         console.log(process.env.BASE_URL);

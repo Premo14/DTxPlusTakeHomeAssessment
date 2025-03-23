@@ -20,26 +20,35 @@ router.post('/', async (req, res) => {
 });
 
 router.all('/voice', (req, res) => {
+    const direction = req.body.Direction || 'unknown';
+    console.log(`📲 Incoming /voice request. Direction: ${direction}`);
+
     const twiml = new twilio.twiml.VoiceResponse();
+
+    twiml.pause({ length: 2 });
 
     twiml.say(
         { voice: 'alice' },
-        'Hello, this is a reminder from your healthcare provider to confirm your medications for the day. Please confirm if you have taken your Aspirin, Cardivol, and Metformin today.'
+        'Hello, this is a reminder from your healthcare provider to confirm your medications for the day. Please leave a message after the beep confirming if you have taken your Aspirin, Cardivol, and Metformin today.'
     );
 
     twiml.record({
         transcribe: false,
         maxLength: 10,
-        action: `/api/call/handle-recording`,
-        recordingStatusCallback: `${process.env.BASE_URL}/api/call/recording-complete`,
-        recordingStatusCallbackMethod: 'POST',
         timeout: 5,
         playBeep: true,
+        trim: 'do-not-trim',
+        action: `${process.env.BASE_URL}/api/call/handle-recording`,
+        recordingStatusCallback: `${process.env.BASE_URL}/api/call/recording-complete`,
+        recordingStatusCallbackMethod: 'POST',
     });
+
+    twiml.say('We did not receive a response. Goodbye.');
 
     res.type('text/xml');
     res.send(twiml.toString());
 });
+
 
 router.post('/handle-recording', (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();

@@ -4,6 +4,10 @@ const path = require('path');
 
 const transcribeFromUrl = async (twilioMp3Url) => {
     try {
+        const callSid = twilioMp3Url.split('/Recordings/')[1].split('.')[0];
+
+        console.log(`🎯 Starting transcription for: ${twilioMp3Url}`);
+        console.log(`📦 Extracted CallSid: ${callSid}`);
 
         const twilioResponse = await axios.get(twilioMp3Url, {
             responseType: 'arraybuffer',
@@ -13,16 +17,14 @@ const transcribeFromUrl = async (twilioMp3Url) => {
             }
         });
 
-        const recordingsDir = path.join(__dirname, '..', 'recordings');
-        if (!fs.existsSync(recordingsDir)) {
-            fs.mkdirSync(recordingsDir);
-            console.log('📁 Created /recordings directory');
-        }
+        const folderPath = path.join(__dirname, '..', 'recordings', callSid);
+        fs.mkdirSync(folderPath, { recursive: true });
 
-        const recordingPath = path.join(recordingsDir, 'recording.mp3');
-        fs.writeFileSync(recordingPath, twilioResponse.data);
-        console.log('🎧 Saved Twilio recording locally at:', recordingPath);
+        const mp3Path = path.join(folderPath, `${callSid}.mp3`);
+        fs.writeFileSync(mp3Path, twilioResponse.data);
+        console.log(`🎧 Saved Twilio recording locally as: ${mp3Path}`);
 
+        console.log('📤 Sending to Deepgram...');
         const deepgramResponse = await axios.post(
             'https://api.deepgram.com/v1/listen',
             twilioResponse.data,
@@ -36,8 +38,13 @@ const transcribeFromUrl = async (twilioMp3Url) => {
         );
 
         console.log('✅ Deepgram response received');
+        console.log('🧠 Deepgram raw response:', JSON.stringify(deepgramResponse.data, null, 2));
 
-        const transcribedText = deepgramResponse.data.results.channels[0].alternatives[0].transcript;
+        const transcribedText = deepgramResponse.data.results.channels[0].alternatives[0].transcript || '';
+
+        const txtPath = path.join(folderPath, `${callSid}.txt`);
+        fs.writeFileSync(txtPath, transcribedText);
+        console.log(`📝 Saved transcript to: ${txtPath}`);
 
         return { transcribedText };
 
